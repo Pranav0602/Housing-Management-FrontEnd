@@ -49,7 +49,7 @@ export const authService = {
 
 // Society services
 export const societyService = {
-  getAllSocieties: () => api.get('/societies'),
+  getAllSocieties: () => api.get('/societies/list'),
   getSocietyById: (id) => api.get(`/societies/${id}`),
   createSociety: (societyData) => api.post('/societies', societyData),
   updateSociety: (id, societyData) => api.put(`/societies/${id}`, societyData),
