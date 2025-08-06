@@ -88,7 +88,9 @@ export const AuthProvider = ({ children }) => {
         societyId,
         societyName
       };
-      
+      console.log('User data:', user); // Debugging line to see user data
+      console.log('User data:', currentUser); // Debugging line to see user data
+
       localStorage.setItem('user', JSON.stringify(user));
       setCurrentUser(user);
       

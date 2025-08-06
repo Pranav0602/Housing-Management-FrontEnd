@@ -3,6 +3,7 @@ import {
   Box, 
   Typography, 
   Grid, 
+  Chip,
   Card, 
   CardContent, 
   TextField, 
@@ -46,7 +47,7 @@ import api from '../../services/api';
 import { format } from 'date-fns';
 
 const GuardVisitorLog = () => {
-  const { user } = useAuth();
+  const { currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [flats, setFlats] = useState([]);
   const [recentVisitors, setRecentVisitors] = useState([]);
@@ -65,14 +66,17 @@ const GuardVisitorLog = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      
+      console.log("Current user:", currentUser);
       try {
-        if (user?.societyId) {
+        if (currentUser?.societyId) {
           // Fetch all flats in the society
-          const flatsResponse = await api.get(`/flats/society/${user.societyId}`);
+          const flatsResponse = await api.get(`/flats/society/${currentUser.societyId}`);
+          console.log("API response:", flatsResponse.data);
           setFlats(flatsResponse.data);
           
           // Fetch recent visitors
-          const visitorsResponse = await api.get(`/visitor-logs/society/${user.societyId}`);
+          const visitorsResponse = await api.get(`/visitor-logs/society/${currentUser.societyId}`);
           // Sort by entry time, most recent first
           const sortedVisitors = visitorsResponse.data.sort((a, b) => 
             new Date(b.entryTime) - new Date(a.entryTime)
@@ -92,7 +96,7 @@ const GuardVisitorLog = () => {
     };
     
     fetchData();
-  }, [user]);
+  }, [currentUser]);
 
   // Form validation schema
   const validationSchema = Yup.object({
@@ -114,8 +118,8 @@ const GuardVisitorLog = () => {
   // Formik setup
   const formik = useFormik({
     initialValues: {
-      visitorName: '',
-      visitorPhone: '',
+      name: '',
+      phone: '',
       purpose: '',
       flatId: ''
     },
@@ -125,8 +129,8 @@ const GuardVisitorLog = () => {
       try {
         const response = await api.post('/visitor-logs', {
           ...values,
-          loggedById: user.id,
-          loggedByName: user.name
+          loggedById: currentUser.id,
+          loggedByName: currentUser.name
         });
         
         // Add the new visitor to recent visitors
