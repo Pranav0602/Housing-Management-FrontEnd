@@ -17,7 +17,7 @@ export const NotificationProvider = ({ children }) => {
   // Connect to WebSocket when user is authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
-      const socket = new SockJS('/api/ws');
+      const socket = new SockJS(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/ws`);
       const client = new Client({
         webSocketFactory: () => socket,
         debug: (str) => {

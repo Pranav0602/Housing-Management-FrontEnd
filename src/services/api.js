@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Base URL for API requests
-const API_BASE_URL = 'http://localhost:8080'; // Update this with your backend URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'; // Use environment variable or fallback to localhost
 
 // Create axios instance with default config
 const api = axios.create({
@@ -58,7 +58,7 @@ export const societyService = {
 
 // Building services
 export const buildingService = {
-  getAllBuildings: (societyId) => api.get(`/societies/${societyId}/buildings`),
+  getAllBuildings: (societyId) => api.get(`/buildings/society/${societyId}`),
   getBuildingById: (id) => api.get(`/buildings/${id}`),
   createBuilding: (buildingData) => api.post('/buildings', buildingData),
   updateBuilding: (id, buildingData) => api.put(`/buildings/${id}`, buildingData),
@@ -67,17 +67,25 @@ export const buildingService = {
 
 // Flat services
 export const flatService = {
-  getAllFlats: (buildingId) => api.get(`/buildings/${buildingId}/flats`),
+  // Used by AdminFlats to get flats for a specific building
+  getFlatsByBuilding: (buildingId) => api.get(`/flats/building/${buildingId}`),
+  getFlatsBySociety: (societyId) => api.get(`/flats/society/${societyId}`),
   getFlatById: (id) => api.get(`/flats/${id}`),
   createFlat: (flatData) => api.post('/flats', flatData),
   updateFlat: (id, flatData) => api.put(`/flats/${id}`, flatData),
   deleteFlat: (id) => api.delete(`/flats/${id}`),
-  requestFlatAllocation: (requestData) => api.post('/flats/allocation-requests', requestData),
+  getMyFlat: () => api.get('/flats/my-flat'),
+  requestFlatAllocation: (requestData) => api.post('/allocation-requests', requestData),
+  // *** ADDED: Required for AdminAllocationRequests page ***
+  getAllFlatAllocationRequests: (societyId) => api.get(`/allocation-requests/society/${societyId}`),
+  approveAllocationRequest: (requestId) => api.put(`/allocation-requests/${requestId}/approve`),
+  rejectAllocationRequest: (requestId) => api.put(`/allocation-requests/${requestId}/reject`),
 };
 
 // Flat member services
 export const flatMemberService = {
-  getAllFlatMembers: (flatId) => api.get(`/flats/${flatId}/members`),
+  // *** CORRECTED: Was missing the /flat/{flatId} part ***
+  getAllFlatMembers: (flatId) => api.get(`/flat-members/flat/${flatId}`),
   getFlatMemberById: (id) => api.get(`/flat-members/${id}`),
   createFlatMember: (memberData) => api.post('/flat-members', memberData),
   updateFlatMember: (id, memberData) => api.put(`/flat-members/${id}`, memberData),
@@ -97,7 +105,11 @@ export const complaintService = {
 export const maintenanceBillService = {
   getAllBills: () => api.get('/maintenance-bills'),
   getBillById: (id) => api.get(`/maintenance-bills/${id}`),
-  payBill: (id, paymentData) => api.post(`/maintenance-bills/${id}/pay`, paymentData),
+  // *** ADDED: Missing functions for bill management ***
+  createBill: (billData) => api.post('/maintenance-bills', billData),
+  updateBill: (id, billData) => api.put(`/maintenance-bills/${id}`, billData),
+  deleteBill: (id) => api.delete(`/maintenance-bills/${id}`),
+  markBillAsPaid: (id, paymentData) => api.post(`/maintenance-bills/${id}/pay`, paymentData),
 };
 
 // Notice services
@@ -111,12 +123,12 @@ export const noticeService = {
 
 // Visitor services
 export const visitorService = {
-  getAllVisitors: () => api.get('/visitors'),
-  getVisitorById: (id) => api.get(`/visitors/${id}`),
-  createVisitor: (visitorData) => api.post('/visitors', visitorData),
-  updateVisitor: (id, visitorData) => api.put(`/visitors/${id}`, visitorData),
-  approveVisitor: (id) => api.put(`/visitors/${id}/approve`),
-  rejectVisitor: (id) => api.put(`/visitors/${id}/reject`),
+  getAllVisitors: () => api.get('/visitor-logs'),
+  getVisitorById: (id) => api.get(`/visitor-logs/${id}`),
+  createVisitor: (visitorData) => api.post('/visitor-logs', visitorData),
+  updateVisitor: (id, visitorData) => api.put(`/visitor-logs/${id}`, visitorData),
+  approveVisitor: (id) => api.put(`/visitor-logs/${id}/approve`),
+  rejectVisitor: (id) => api.put(`/visitor-logs/${id}/reject`),
 };
 
 export default api;

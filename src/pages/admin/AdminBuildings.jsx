@@ -6,20 +6,23 @@ import { buildingService } from '../../services/api';
 import BuildingForm from '../../components/admin/BuildingForm';
 
 const AdminBuildings = () => {
-  const { currentUser } = useAuth();
-  const [buildings, setBuildings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editingBuilding, setEditingBuilding] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(null);
+const { currentUser } = useAuth();
+const [buildings, setBuildings] = useState([]);
+const [loading, setLoading] = useState(true);
+const [showForm, setShowForm] = useState(false);
+const [editingBuilding, setEditingBuilding] = useState(null);
+const [searchTerm, setSearchTerm] = useState('');
+const [confirmDelete, setConfirmDelete] = useState(null);
 
   useEffect(() => {
     fetchBuildings();
   }, [currentUser]);
 
   const fetchBuildings = async () => {
-    if (!currentUser || !currentUser.societyId) return;
+    if (!currentUser || !currentUser.societyId){
+      setBuildings([]);
+      return;
+    }
     
     try {
       setLoading(true);
@@ -93,7 +96,7 @@ const AdminBuildings = () => {
     building.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading && buildings.length === 0) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>

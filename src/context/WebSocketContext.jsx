@@ -32,7 +32,7 @@ export const WebSocketProvider = ({ children }) => {
 
   // Connect to WebSocket
   const connectWebSocket = () => {
-    const socket = new SockJS('http://localhost:8080/ws'); // Update with your backend WebSocket URL
+    const socket = new SockJS(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/ws`); // Use environment variable or fallback to localhost
     const client = new Client({
       webSocketFactory: () => socket,
       debug: (str) => {
@@ -63,14 +63,12 @@ export const WebSocketProvider = ({ children }) => {
           });
           
           // Subscribe to flat allocation requests
-          client.subscribe('/topic/flat-allocation-requests', (message) => {
-            const request = JSON.parse(message.body);
-            toast.info(`New flat allocation request from ${request.userName}`);
-            handleNotification({
-              type: 'FLAT_ALLOCATION_REQUEST',
-              message: `New flat allocation request from ${request.userName}`,
-              data: request
-            });
+          client.subscribe('/topic/admin/' + currentUser.societyId, (message) => {
+            const notification = JSON.parse(message.body);
+            if (notification.type === 'NEW_ALLOCATION_REQUEST') {
+              toast.info(notification.message);
+              handleNotification(notification);
+            }
           });
         }
 

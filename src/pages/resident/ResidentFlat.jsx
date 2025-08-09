@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FaHome, FaBuilding, FaRulerCombined, FaUserFriends, FaMoneyBillWave } from 'react-icons/fa';
+import { FaHome, FaBuilding, FaRulerCombined, FaUserFriends, FaMoneyBillWave, FaExclamationTriangle } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { flatService } from '../../services/api';
 
@@ -21,22 +21,23 @@ const ResidentFlat = () => {
       setLoading(true);
       setError(null);
       
-      // Get all flats to find the one assigned to the current user
-      const response = await flatService.getAllFlats();
-      const userFlat = response.data.find(flat => 
-        flat.ownerId === currentUser.id || 
-        (flat.residents && flat.residents.some(resident => resident.userId === currentUser.id))
-      );
+      // Use the correct and efficient endpoint to get only the current user's flat
+      const response = await flatService.getMyFlat();
       
-      if (userFlat) {
-        setFlatDetails(userFlat);
+      if (response.data) {
+        setFlatDetails(response.data);
       } else {
         setError('No flat is currently assigned to you. Please request a flat allocation.');
       }
     } catch (err) {
-      console.error('Error fetching flat details:', err);
-      setError('Failed to load flat details. Please try again later.');
-      toast.error('Failed to load flat details');
+      // A 404 error from this endpoint specifically means no flat is allocated
+      if (err.response && err.response.status === 404) {
+        setError('No flat is currently assigned to you. Please request a flat allocation.');
+      } else {
+        console.error('Error fetching flat details:', err);
+        setError('Failed to load flat details. Please try again later.');
+        toast.error('Failed to load flat details');
+      }
     } finally {
       setLoading(false);
     }
@@ -53,7 +54,7 @@ const ResidentFlat = () => {
   if (error) {
     return (
       <div className="bg-white rounded-lg shadow p-6 text-center">
-        <FaHome className="text-blue-500 text-5xl mx-auto mb-4" />
+        <FaExclamationTriangle className="text-red-500 text-5xl mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-800 mb-2">{error}</h2>
         {error.includes('request') && (
           <a 
@@ -68,6 +69,7 @@ const ResidentFlat = () => {
   }
 
   if (!flatDetails) {
+    // This case will now be handled by the error state above, but it's good practice to keep it.
     return (
       <div className="bg-white rounded-lg shadow p-6 text-center">
         <FaHome className="text-blue-500 text-5xl mx-auto mb-4" />
@@ -85,6 +87,7 @@ const ResidentFlat = () => {
     );
   }
 
+  // The rest of your component remains the same...
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">My Flat</h1>
@@ -112,24 +115,25 @@ const ResidentFlat = () => {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Type:</span>
-                  <span className="font-medium">{flatDetails.type || 'Standard'}</span>
+                  <span className="font-medium">{flatDetails.flatType || 'Standard'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Floor:</span>
-                  <span className="font-medium">{flatDetails.floor}</span>
+                  <span className="font-medium">{flatDetails.floorNumber}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Area:</span>
                   <span className="font-medium">{flatDetails.area} sq.ft</span>
                 </div>
-                <div className="flex justify-between">
+                {/* These fields are not in FlatDTO, you might need to add them or remove from here */}
+                {/* <div className="flex justify-between">
                   <span className="text-gray-600">Bedrooms:</span>
                   <span className="font-medium">{flatDetails.bedrooms || '-'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Bathrooms:</span>
                   <span className="font-medium">{flatDetails.bathrooms || '-'}</span>
-                </div>
+                </div> */}
               </div>
             </div>
             
@@ -144,14 +148,15 @@ const ResidentFlat = () => {
                   <span className="text-gray-600">Building Name:</span>
                   <span className="font-medium">{flatDetails.buildingName || '-'}</span>
                 </div>
-                <div className="flex justify-between">
+                {/* These fields are not in FlatDTO */}
+                {/* <div className="flex justify-between">
                   <span className="text-gray-600">Total Floors:</span>
                   <span className="font-medium">{flatDetails.totalFloors || '-'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Address:</span>
                   <span className="font-medium">{flatDetails.buildingAddress || '-'}</span>
-                </div>
+                </div> */}
               </div>
             </div>
             
@@ -162,24 +167,25 @@ const ResidentFlat = () => {
                 Occupancy Details
               </h3>
               <div className="space-y-2">
-                <div className="flex justify-between">
+                {/* These fields are not in FlatDTO */}
+                {/* <div className="flex justify-between">
                   <span className="text-gray-600">Status:</span>
                   <span className="font-medium">{flatDetails.occupiedStatus || 'OCCUPIED'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Resident Type:</span>
                   <span className="font-medium">{flatDetails.residentType || 'OWNER'}</span>
-                </div>
+                </div> */}
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Family Members:</span>
-                  <span className="font-medium">{flatDetails.familyMembers || '0'}</span>
+                  <span className="text-gray-600">Total Members:</span>
+                  <span className="font-medium">{flatDetails.totalMembers || '0'}</span>
                 </div>
-                <div className="flex justify-between">
+                {/* <div className="flex justify-between">
                   <span className="text-gray-600">Since:</span>
                   <span className="font-medium">
                     {flatDetails.occupiedSince ? new Date(flatDetails.occupiedSince).toLocaleDateString() : '-'}
                   </span>
-                </div>
+                </div> */}
               </div>
             </div>
           </div>

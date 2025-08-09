@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {jwtDecode} from 'jwt-decode';
 import { toast } from 'react-toastify';
 import { authService } from '../services/api';
+import { flatService } from '../services/api';
 
 // Create the auth context
 const AuthContext = createContext();
@@ -17,6 +18,7 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [hasAllocatedFlat, setHasAllocatedFlat] = useState(null);
   const navigate = useNavigate();
 
   // Check if token is expired
@@ -28,9 +30,32 @@ export const AuthProvider = ({ children }) => {
       return true;
     }
   };
+  // Check if resident has an allocated flat
+  const checkFlatAllocation = async () => {
+    if (!currentUser || currentUser.role !== 'RESIDENT') {
+      return true; // Not applicable for non-residents
+    }
+
+    try {
+      const response = await flatService.getMyFlat();
+      const hasFlat = !!(response.data && response.data.id);
+      setHasAllocatedFlat(hasFlat);
+      return hasFlat;
+    } catch (error) {
+      // Specifically handle 404 for residents without a flat
+      if (error.response && error.response.status === 404) {
+        setHasAllocatedFlat(false);
+        return false;
+      }
+      console.error('Error checking flat allocation:', error);
+      setHasAllocatedFlat(false);
+      return false;
+    }
+  };
 
   // Load user from localStorage on component mount
   useEffect(() => {
+    const loadUser = async () => {
     const token = localStorage.getItem('token');
     const userStr = localStorage.getItem('user');
     
@@ -38,6 +63,9 @@ export const AuthProvider = ({ children }) => {
       try {
         const user = JSON.parse(userStr);
         setCurrentUser(user);
+        if (user.role === 'RESIDENT') {
+            await checkFlatAllocation();
+          }
       } catch (error) {
         console.error('Failed to parse user from localStorage', error);
         localStorage.removeItem('token');
@@ -46,15 +74,37 @@ export const AuthProvider = ({ children }) => {
     }
     
     setLoading(false);
-  }, []);
-
+  };
+  loadUser();
+}, []);
   // Register a new user
   const register = async (userData) => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await authService.register(userData);
+       const sanitizedUserData = {
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        password: userData.password,
+        confirmPassword: userData.confirmPassword,
+        role: userData.role,
+        societyId: userData.societyId
+      };
+
+        // If user is admin and creating a society, include only the expected fields
+      if (userData.role === 'ADMIN' && userData.societyCreationRequest) {
+        sanitizedUserData.societyCreationRequest = {
+          name: userData.societyCreationRequest.name,
+          address: userData.societyCreationRequest.address,
+          city: userData.societyCreationRequest.city,
+          state: userData.societyCreationRequest.state,
+          pincode: userData.societyCreationRequest.pincode,
+          numberOfBuildings: userData.societyCreationRequest.numberOfBuildings
+        };
+      }
+      const response = await authService.register(sanitizedUserData);
       toast.success('Registration successful! Please login.');
       navigate('/login');
       return response.data;
@@ -88,8 +138,7 @@ export const AuthProvider = ({ children }) => {
         societyId,
         societyName
       };
-      console.log('User data:', user); // Debugging line to see user data
-      console.log('User data:', currentUser); // Debugging line to see user data
+     
 
       localStorage.setItem('user', JSON.stringify(user));
       setCurrentUser(user);
@@ -100,7 +149,15 @@ export const AuthProvider = ({ children }) => {
       if (role === 'ADMIN') {
         navigate('/admin/dashboard');
       } else if (role === 'RESIDENT') {
-        navigate('/resident/dashboard');
+        // Check if resident has an allocated flat
+        const hasFlat = await checkFlatAllocation();
+        if (hasFlat) {
+          navigate('/resident/dashboard');
+        } else {
+          // Redirect to flat allocation request form if no flat is allocated
+          navigate('/resident/request-allocation');
+          toast.info('Please submit a flat allocation request to continue.');
+        }
       } else if (role === 'GUARD') {
         navigate('/guard/dashboard');
       }
@@ -141,11 +198,13 @@ export const AuthProvider = ({ children }) => {
     currentUser,
     loading,
     error,
+    hasAllocatedFlat,
     register,
     login,
     logout,
     isAuthenticated,
-    hasRole
+    hasRole,
+    checkFlatAllocation
   };
 
   return (

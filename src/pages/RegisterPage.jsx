@@ -26,15 +26,25 @@ const RegisterSchema = Yup.object().shape({
   role: Yup.string()
     .oneOf(['ADMIN', 'RESIDENT', 'GUARD'], 'Invalid role')
     .required('Role is required'),
+  
+  // A new field to track the admin's choice
+  adminSocietyOption: Yup.string().oneOf(['new', 'existing']),
+
   societyId: Yup.number()
-    .when('role', {
-      is: (role) => role === 'RESIDENT' || role === 'GUARD',
-      then: () => Yup.number().required('Society is required'),
-      otherwise: () => Yup.number().nullable()
+    .when(['role', 'adminSocietyOption'], {
+      // Require societyId if role is Resident/Guard OR if Admin chooses 'existing'
+      is: (role, adminSocietyOption) => 
+        role === 'RESIDENT' || 
+        role === 'GUARD' || 
+        (role === 'ADMIN' && adminSocietyOption === 'existing'),
+      then: (schema) => schema.required('Society is required'),
+      otherwise: (schema) => schema.nullable(),
     }),
-  societyCreationRequest: Yup.object().when('role', {
-    is: 'ADMIN',
-    then: () => Yup.object().shape({
+    
+  societyCreationRequest: Yup.object().when(['role', 'adminSocietyOption'], {
+    // Require societyCreationRequest only if Admin chooses 'new'
+    is: (role, adminSocietyOption) => role === 'ADMIN' && adminSocietyOption === 'new',
+    then: (schema) => schema.shape({
       name: Yup.string()
         .min(2, 'Society name is too short')
         .max(100, 'Society name is too long')
@@ -58,7 +68,7 @@ const RegisterSchema = Yup.object().shape({
         .min(1, 'Number of buildings must be at least 1')
         .required('Number of buildings is required')
     }),
-    otherwise: () => Yup.object().nullable()
+    otherwise: (schema) => schema.nullable(),
   })
 });
 
@@ -85,40 +95,33 @@ const RegisterPage = () => {
     fetchSocieties();
   }, []);
 
-    const handleSubmit = async (values, { setSubmitting }) => {
-        console.log('Form values:', values); // Debugging line to see form values
+  const handleSubmit = async (values, { setSubmitting }) => {
     try {
       setRegisterError('');
 
-      // 1. Destructure all values from the form
       const { 
         role, 
         societyId, 
         societyCreationRequest,  
-        ...userData // The rest of the user data (name, email, phone, password)
+        adminSocietyOption,
+        ...userData 
       } = values;
 
-      // 2. Create a clean payload object with the base user data
       const payload = { ...userData, role };
 
-      // 3. Conditionally add role-specific data
       if (role === 'ADMIN') {
-        // Only include societyCreationRequest for Admins
-        payload.societyCreationRequest = societyCreationRequest;
+        if (adminSocietyOption === 'new') {
+          payload.societyCreationRequest = societyCreationRequest;
+        } else { // 'existing'
+          payload.societyId = societyId;
+        }
       } else if (role === 'RESIDENT' || role === 'GUARD') {
-        // Only include societyId for Residents and Guards
         payload.societyId = societyId;
       }
       
-      // 4. Send the clean payload to the register function
-      // Use console.log to see the exact data being sent
-      console.log('Submitting the following payload:', payload); 
-      
       await register(payload);
-
       navigate('/login');
     } catch (error) {
-      // The console.error here is very important for debugging!
       console.error('Registration error:', error.response || error);
       setRegisterError(error.response?.data?.message || 'Failed to register. Please try again.');
     } finally {
@@ -148,6 +151,7 @@ const RegisterPage = () => {
             confirmPassword: '',
             role: '',
             societyId: '',
+            adminSocietyOption: 'new', // Default admin choice
             societyCreationRequest: {
               name: '',
               address: '',
@@ -172,7 +176,7 @@ const RegisterPage = () => {
               )}
               
               <div className="space-y-4">
-                {/* Name Field */}
+                {/* Name, Email, Phone, Password fields remain the same... */}
                 <div>
                   <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                     Full Name
@@ -195,7 +199,6 @@ const RegisterPage = () => {
                   <ErrorMessage name="name" component="p" className="mt-1 text-sm text-red-600" />
                 </div>
                 
-                {/* Email Field */}
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                     Email address
@@ -218,7 +221,6 @@ const RegisterPage = () => {
                   <ErrorMessage name="email" component="p" className="mt-1 text-sm text-red-600" />
                 </div>
                 
-                {/* Phone Field */}
                 <div>
                   <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
                     Phone Number
@@ -241,7 +243,6 @@ const RegisterPage = () => {
                   <ErrorMessage name="phone" component="p" className="mt-1 text-sm text-red-600" />
                 </div>
                 
-                {/* Password Field */}
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                     Password
@@ -264,7 +265,6 @@ const RegisterPage = () => {
                   <ErrorMessage name="password" component="p" className="mt-1 text-sm text-red-600" />
                 </div>
                 
-                {/* Confirm Password Field */}
                 <div>
                   <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
                     Confirm Password
@@ -308,8 +308,25 @@ const RegisterPage = () => {
                   <ErrorMessage name="role" component="p" className="mt-1 text-sm text-red-600" />
                 </div>
                 
-                {/* Society Selection for Resident and Guard */}
-                {values.role && (values.role === 'RESIDENT' || values.role === 'GUARD') && (
+                {/* Admin: Society Choice */}
+                {values.role === 'ADMIN' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Society Setup</label>
+                    <div role="group" aria-labelledby="admin-society-option-group" className="mt-2 flex space-x-4">
+                      <label className="inline-flex items-center">
+                        <Field type="radio" name="adminSocietyOption" value="new" className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+                        <span className="ml-2 text-gray-700">Create New Society</span>
+                      </label>
+                      <label className="inline-flex items-center">
+                        <Field type="radio" name="adminSocietyOption" value="existing" className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+                        <span className="ml-2 text-gray-700">Join Existing Society</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Society Selection for Resident, Guard, or Admin choosing 'existing' */}
+                {(values.role === 'RESIDENT' || values.role === 'GUARD' || (values.role === 'ADMIN' && values.adminSocietyOption === 'existing')) && (
                   <div>
                     <label htmlFor="societyId" className="block text-sm font-medium text-gray-700">
                       Select Society
@@ -333,9 +350,9 @@ const RegisterPage = () => {
                   </div>
                 )}
                 
-                {/* Society Creation for Admin */}
-                {values.role === 'ADMIN' && (
-                  <div className="space-y-4 mt-6 p-4 bg-gray-50 rounded-md">
+                {/* Society Creation for Admin choosing 'new' */}
+                {values.role === 'ADMIN' && values.adminSocietyOption === 'new' && (
+                  <div className="space-y-4 mt-6 p-4 bg-gray-50 rounded-md border border-gray-200">
                     <h3 className="font-medium text-gray-900">Create New Society</h3>
                     
                     {/* Society Name */}

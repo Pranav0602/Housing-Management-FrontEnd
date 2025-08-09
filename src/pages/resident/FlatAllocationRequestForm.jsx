@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'react-toastify';
-import { FaHome, FaUsers, FaBriefcase, FaPhone } from 'react-icons/fa';
+import { FaHome, FaUsers, FaBriefcase, FaPhone, FaInfoCircle } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { flatService, buildingService } from '../../services/api';
 import { useWebSocket } from '../../context/WebSocketContext';
@@ -27,32 +27,67 @@ const AllocationRequestSchema = Yup.object().shape({
 });
 
 const FlatAllocationRequestForm = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, checkFlatAllocation } = useAuth();
   const navigate = useNavigate();
   const { sendMessage } = useWebSocket();
   const [buildings, setBuildings] = useState([]);
   const [availableFlats, setAvailableFlats] = useState([]);
   const [selectedBuilding, setSelectedBuilding] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Set initial loading to true
+  const [allocationStatus, setAllocationStatus] = useState(null);
 
   useEffect(() => {
-    const fetchBuildings = async () => {
-      if (!currentUser || !currentUser.societyId) return;
-      
+    const checkExistingAllocation = async () => {
       try {
-        setLoading(true);
-        const response = await buildingService.getAllBuildings(currentUser.societyId);
-        setBuildings(response.data);
+        const hasFlat = await checkFlatAllocation();
+        if (hasFlat) {
+          toast.info('You already have an allocated flat.');
+          navigate('/resident/dashboard');
+          return;
+        }
+
+        // CORRECTED: Use the right function to get all flats for the society
+        const response = await flatService.getFlatsBySociety(currentUser.societyId);
+        const allFlats = response.data;
+        
+        const pendingAllocation = allFlats.find(
+          flat => flat.allocationRequests && flat.allocationRequests.some(
+            req => req.userId === currentUser.id && req.status === 'PENDING'
+          )
+        );
+        
+        if (pendingAllocation) {
+          setAllocationStatus('PENDING');
+        } else {
+          setAllocationStatus('NOT_REQUESTED');
+        }
+        
+        // This will now run correctly
+        await fetchBuildings();
+
       } catch (error) {
-        console.error('Failed to fetch buildings:', error);
-        toast.error('Failed to load buildings. Please try again.');
+        console.error('Error checking allocation status:', error);
+        toast.error('Could not load allocation details.');
       } finally {
         setLoading(false);
       }
     };
+    
+    if (currentUser) {
+      checkExistingAllocation();
+    }
+  }, [currentUser, navigate, checkFlatAllocation]);
 
-    fetchBuildings();
-  }, [currentUser]);
+  const fetchBuildings = async () => {
+    if (!currentUser || !currentUser.societyId) return;
+    try {
+      const response = await buildingService.getAllBuildings(currentUser.societyId);
+      setBuildings(response.data);
+    } catch (error) {
+      console.error('Failed to fetch buildings:', error);
+      toast.error('Failed to load buildings. Please try again.');
+    }
+  };
 
   useEffect(() => {
     const fetchAvailableFlats = async () => {
@@ -63,9 +98,11 @@ const FlatAllocationRequestForm = () => {
       
       try {
         setLoading(true);
-        const response = await flatService.getAllFlats(selectedBuilding);
-        // Filter only available flats
-        const available = response.data.filter(flat => flat.occupiedStatus === 'VACANT');
+        // CORRECTED: Use the renamed, specific function
+        const response = await flatService.getFlatsByBuilding(selectedBuilding);
+        console.log('Available flats:', response.data);
+        const available = response.data.filter(flat => flat.occupiedStatus == 'VACANT' || flat.occupiedStatus == undefined);
+        console.log('Filtered available flats:', available);
         setAvailableFlats(available);
       } catch (error) {
         console.error('Failed to fetch flats:', error);
@@ -78,27 +115,29 @@ const FlatAllocationRequestForm = () => {
     fetchAvailableFlats();
   }, [selectedBuilding]);
 
+  // ... (the rest of your component remains the same)
+  
   const handleSubmit = async (values, { setSubmitting }) => {
     try {
-      // Add user information
       const requestData = {
         ...values,
+        userId: currentUser.id,
         userName: currentUser.name,
         userEmail: currentUser.email
       };
       
       const response = await flatService.requestFlatAllocation(requestData);
       
-      // Send WebSocket notification to admin
       sendMessage('/app/flat-allocation-requests', {
         requestId: response.data.id,
         flatId: values.flatId,
         userName: currentUser.name,
-        userEmail: currentUser.email
+        userEmail: currentUser.email,
+        societyId: currentUser.societyId
       });
       
       toast.success('Flat allocation request submitted successfully. Waiting for admin approval.');
-      navigate('/resident/dashboard');
+      setAllocationStatus('PENDING');
     } catch (error) {
       console.error('Error submitting flat allocation request:', error);
       toast.error('Failed to submit request. Please try again.');
@@ -106,6 +145,8 @@ const FlatAllocationRequestForm = () => {
       setSubmitting(false);
     }
   };
+  
+  // The rest of the component remains the same...
 
   if (loading) {
     return (
@@ -115,11 +156,99 @@ const FlatAllocationRequestForm = () => {
     );
   }
 
+  if (allocationStatus === 'PENDING') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Flat Allocation Request</h1>
+          <p className="text-gray-600">Your request status</p>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-8 text-center">
+          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FaInfoCircle className="text-yellow-500 text-2xl" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Request Pending Approval</h2>
+          <p className="text-gray-600 mb-6">
+            Your flat allocation request is currently under review by the society administrator.
+            You will be notified once your request is approved or rejected.
+          </p>
+          <div className="inline-flex items-center px-4 py-2 bg-yellow-100 text-yellow-800 rounded-full">
+            <span className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></span>
+            Pending Approval
+          </div>
+          <div className="mt-6">
+            <button
+              onClick={() => navigate('/resident/dashboard')}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (allocationStatus === 'REJECTED') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Flat Allocation Request</h1>
+          <p className="text-gray-600">Your request status</p>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-8 text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FaInfoCircle className="text-red-500 text-2xl" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Previous Request Rejected</h2>
+          <p className="text-gray-600 mb-6">
+            Your previous flat allocation request was rejected by the administrator.
+            You can submit a new request or contact the society office for more information.
+          </p>
+          <div className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 rounded-full mb-6">
+            <span className="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
+            Request Rejected
+          </div>
+          <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-3">
+            <button
+              onClick={() => setAllocationStatus('NOT_REQUESTED')}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+            >
+              Submit New Request
+            </button>
+            <button
+              onClick={() => navigate('/resident/dashboard')}
+              className="px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 transition"
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Request Flat Allocation</h1>
         <p className="text-gray-600">Submit your request for flat allocation in the society</p>
+      </div>
+      
+      <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <FaInfoCircle className="h-5 w-5 text-blue-500" />
+          </div>
+          <div className="ml-3">
+            <p className="text-sm text-blue-700">
+              You need to request a flat allocation before you can access the resident dashboard.
+              This request will be reviewed by the society administrator.
+            </p>
+          </div>
+        </div>
       </div>
       
       <div className="bg-white rounded-lg shadow p-6">

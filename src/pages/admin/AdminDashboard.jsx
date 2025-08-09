@@ -17,31 +17,54 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
-      if (!currentUser || !currentUser.societyId) return;
+      if (!currentUser || !currentUser.societyId) {
+        setLoading(false);
+        return;
+      }
       
       try {
         setLoading(true);
         
         // Fetch buildings
         const buildingsResponse = await buildingService.getAllBuildings(currentUser.societyId);
-        const buildings = buildingsResponse.data;
+        const buildings = buildingsResponse.data || [];
         
         // Fetch flats
         let flats = [];
-        for (const building of buildings) {
-          const flatsResponse = await flatService.getAllFlats(building.id);
-          flats = [...flats, ...flatsResponse.data];
+        try {
+          for (const building of buildings) {
+            try {
+              const flatsResponse = await flatService.getFlatsByBuilding(building.id);
+              if (flatsResponse.data) {
+                flats = [...flats, ...flatsResponse.data];
+              }
+            } catch (flatError) {
+              console.error(`Error fetching flats for building ${building.id}:`, flatError);
+            }
+          }
+        } catch (buildingError) {
+          console.error('Error processing buildings:', buildingError);
         }
         
         // Fetch complaints
-        const complaintsResponse = await complaintService.getAllComplaints();
-        const pendingComplaints = complaintsResponse.data.filter(
-          complaint => complaint.status === 'PENDING' || complaint.status === 'IN_PROGRESS'
-        );
+        let pendingComplaints = [];
+        try {
+          const complaintsResponse = await complaintService.getAllComplaints();
+          pendingComplaints = (complaintsResponse.data || []).filter(
+            complaint => complaint.status === 'PENDING' || complaint.status === 'IN_PROGRESS'
+          );
+        } catch (complaintsError) {
+          console.error('Error fetching complaints:', complaintsError);
+        }
         
         // Fetch maintenance bills
-        const billsResponse = await maintenanceBillService.getAllBills();
-        const unpaidBills = billsResponse.data.filter(bill => !bill.paid);
+        let unpaidBills = [];
+        try {
+          const billsResponse = await maintenanceBillService.getAllBills();
+          unpaidBills = (billsResponse.data || []).filter(bill => !bill.paid);
+        } catch (billsError) {
+          console.error('Error fetching maintenance bills:', billsError);
+        }
         
         // Set stats
         setStats({
@@ -54,6 +77,15 @@ const AdminDashboard = () => {
         });
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
+        // Set default stats to prevent UI from being stuck in loading state
+        setStats({
+          totalBuildings: 0,
+          totalFlats: 0,
+          totalResidents: 0,
+          pendingComplaints: 0,
+          pendingAllocations: 0,
+          unpaidBills: 0
+        });
       } finally {
         setLoading(false);
       }

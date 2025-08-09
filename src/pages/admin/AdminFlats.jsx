@@ -24,40 +24,38 @@ const AdminFlats = () => {
   useEffect(() => {
     if (buildings.length > 0) {
       fetchFlats();
+    } else if (!loading) { // If not loading and no buildings, set flats to empty
+      setFlats([]);
     }
   }, [buildings, selectedBuilding]);
 
   const fetchBuildings = async () => {
-    if (!currentUser || !currentUser.societyId) return;
-    
-    try {
-      const response = await buildingService.getAllBuildings(currentUser.societyId);
-      setBuildings(response.data);
-    } catch (error) {
-      console.error('Error fetching buildings:', error);
-      toast.error('Failed to load buildings. Please try again.');
-    }
-  };
+  if (!currentUser || !currentUser.societyId) {
+    setLoading(false);
+    return;
+  }
+  try {
+    setLoading(true);
+    const response = await buildingService.getAllBuildings(currentUser.societyId);
+    setBuildings(response.data);
+    await fetchFlats(); 
+  } catch (error) {
+    console.error('Error fetching buildings:', error);
+    toast.error('Failed to load buildings. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const fetchFlats = async () => {
+   const fetchFlats = async () => {
     try {
       setLoading(true);
       let response;
-      
       if (selectedBuilding) {
-        response = await flatService.getAllFlats(selectedBuilding);
-      } else if (buildings.length > 0) {
-        // Fetch flats from all buildings
-        const allFlats = [];
-        for (const building of buildings) {
-          const buildingFlats = await flatService.getAllFlats(building.id);
-          allFlats.push(...buildingFlats.data);
-        }
-        response = { data: allFlats };
+        response = await flatService.getFlatsByBuilding(selectedBuilding);
       } else {
-        response = { data: [] };
+        response = await flatService.getFlatsBySociety(currentUser.societyId);
       }
-      
       setFlats(response.data);
     } catch (error) {
       console.error('Error fetching flats:', error);
@@ -82,7 +80,6 @@ const AdminFlats = () => {
       setConfirmDelete(flatId);
       return;
     }
-    
     try {
       await flatService.deleteFlat(flatId);
       toast.success('Flat deleted successfully');
@@ -125,19 +122,14 @@ const AdminFlats = () => {
     setSelectedStatus(e.target.value);
   };
 
-  const filteredFlats = flats.filter(flat => {
-    // Filter by search term
+   const filteredFlats = flats.filter(flat => {
     const matchesSearch = 
-      flat.flatNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (flat.description && flat.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    // Filter by status
+      String(flat.flatNumber).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = selectedStatus ? flat.occupiedStatus === selectedStatus : true;
-    
     return matchesSearch && matchesStatus;
   });
 
-  if (loading && flats.length === 0) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>

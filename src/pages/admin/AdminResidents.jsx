@@ -25,7 +25,7 @@ const AdminResidents = () => {
       setLoading(true);
       
       // Fetch all flats in the society
-      const flatsResponse = await flatService.getAllFlats();
+      const flatsResponse = await flatService.getFlatsBySociety(currentUser.societyId);
       const societyFlats = flatsResponse.data.filter(flat => flat.societyId === currentUser.societyId);
       setFlats(societyFlats);
       
@@ -33,30 +33,22 @@ const AdminResidents = () => {
       const allResidents = [];
       const allFlatMembers = [];
       
-      // Process each flat to get its residents
-      for (const flat of societyFlats) {
-        if (flat.occupiedStatus === 'OCCUPIED') {
+    for (const flat of societyFlats) {
+        if (flat.occupiedStatus === 'OCCUPIED' && flat.ownerId) {
+          allResidents.push({
+            id: flat.ownerId,
+            name: flat.ownerName || 'Unknown',
+            email: flat.ownerEmail || 'N/A',
+            phone: flat.ownerPhone || 'N/A',
+            flatId: flat.id,
+            flatNumber: flat.flatNumber,
+            isOwner: true,
+            residentType: flat.residentType || 'OWNER'
+          });
+
           try {
-            // Get flat members
             const membersResponse = await flatMemberService.getAllFlatMembers(flat.id);
-            const members = membersResponse.data;
-            
-            // Add flat members to the list
-            allFlatMembers.push(...members);
-            
-            // Add flat owner as a resident
-            if (flat.ownerId) {
-              allResidents.push({
-                id: flat.ownerId,
-                name: flat.ownerName || 'Unknown',
-                email: flat.ownerEmail || 'N/A',
-                phone: flat.ownerPhone || 'N/A',
-                flatId: flat.id,
-                flatNumber: flat.flatNumber,
-                isOwner: true,
-                residentType: flat.residentType || 'OWNER'
-              });
-            }
+            allFlatMembers.push(...membersResponse.data);
           } catch (error) {
             console.error(`Error fetching members for flat ${flat.id}:`, error);
           }
@@ -98,7 +90,7 @@ const AdminResidents = () => {
     return matchesSearch && matchesType;
   });
 
-  if (loading && residents.length === 0) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>

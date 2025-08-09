@@ -21,57 +21,27 @@ const ResidentDashboard = () => {
       try {
         setLoading(true);
         
-        // Check if user has an allocated flat
-        const response = await flatService.getAllFlats();
-        const userFlat = response.data.find(flat => 
-          flat.residents && flat.residents.some(resident => resident.userId === currentUser.id)
-        );
-        
-        if (userFlat) {
-          setFlatDetails(userFlat);
-          
-          // Fetch flat members
-          const membersResponse = await flatService.getAllFlatMembers(userFlat.id);
-          setFlatMembers(membersResponse.data);
-          
-          // Fetch complaints
-          const complaintsResponse = await complaintService.getAllComplaints();
-          const userComplaints = complaintsResponse.data.filter(
-            complaint => complaint.flatId === userFlat.id
-          );
-          setComplaints(userComplaints);
-          
-          // Fetch bills
-          const billsResponse = await maintenanceBillService.getAllBills();
-          const userBills = billsResponse.data.filter(
-            bill => bill.flatId === userFlat.id
-          );
-          setBills(userBills);
-        } else {
-          // Check if user has pending allocation request
-          const allocationResponse = await flatService.getAllFlats();
-          const pendingAllocation = allocationResponse.data.find(
-            flat => flat.allocationRequests && flat.allocationRequests.some(
-              req => req.userId === currentUser.id
-            )
-          );
-          
-          if (pendingAllocation) {
-            const request = pendingAllocation.allocationRequests.find(
-              req => req.userId === currentUser.id
-            );
-            setAllocationStatus(request.status);
-          } else {
-            setAllocationStatus('NOT_REQUESTED');
-          }
-        }
-        
-        // Fetch notices
-        const noticesResponse = await noticeService.getAllNotices();
-        setNotices(noticesResponse.data);
+        // --- THIS IS THE REFACTORED LOGIC ---
+        // Single, efficient API call to get only the user's flat
+        const flatResponse = await flatService.getMyFlat();
+        setFlatDetails(flatResponse.data);
+
+        // You can now fetch other data related to this specific flat
+        const userFlat = flatResponse.data;
+        // Fetch complaints for this flat
+        const complaintsResponse = await complaintService.getAllComplaints();
+        const userComplaints = complaintsResponse.data.filter(c => c.flatId === userFlat.id);
+        setComplaints(userComplaints);
+        // ... fetch bills, etc.
         
       } catch (error) {
-        console.error('Error fetching resident data:', error);
+        // A 404 error from our new endpoint now clearly means no flat is allocated
+        if (error.response && error.response.status === 404) {
+          console.log("User does not have an allocated flat.");
+          setAllocationStatus('NOT_REQUESTED'); 
+        } else {
+          console.error('Error fetching resident data:', error);
+        }
       } finally {
         setLoading(false);
       }
@@ -79,6 +49,9 @@ const ResidentDashboard = () => {
 
     fetchResidentData();
   }, [currentUser]);
+        
+    
+          
 
   if (loading) {
     return (
